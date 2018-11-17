@@ -56,7 +56,7 @@ namespace Hermes.Controllers
         public async Task<IActionResult> GatherResult([FromForm] string callSid, [FromForm] string speechResult)
         {
             _logger.LogDebug($"Full@{DateTime.Now.ToString()} {callSid}: {speechResult}");
-            await _hubContext.Clients.All.SendAsync("SendSpeech", callSid, "Answered the phone call");
+            await _hubContext.Clients.All.SendAsync("SendSpeech", callSid, $"{speechResult}");
 
             return await Dispatcher(callSid, speechResult);
         }
@@ -89,7 +89,7 @@ namespace Hermes.Controllers
                     // play corresponding voices then
                     // Else, play some useless voices
                     _logger.LogInformation($"[{callSid}]Current intent unknown, input {intent}, score {score.Value}");
-                    await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Current Unknown. Got intent {intent}@{score.Value}");
+                    await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [Unknown]. Got intent [{intent}@{score.Value}]");
 
                     if (score > 0.2 && IsEndingIntent(intent))
                     {
@@ -119,7 +119,7 @@ namespace Hermes.Controllers
                     // Filter ending intent
                     _logger.LogInformation(
                         $"[{callSid}]Current intent {state.Intent}, input {intent}, score {score.Value}");
-                    await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Current {state.Intent}. Got intent {intent}@{score.Value}");
+                    await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [{state.Intent}]. Got intent [{intent}@{score.Value}]");
 
                     if (score > 0.2 && IsEndingIntent(intent))
                     {
@@ -136,7 +136,7 @@ namespace Hermes.Controllers
         private async Task<VoiceResponse> TwiMlTransfer()
         {
             _logger.LogDebug("Transferring call");
-            await _hubContext.Clients.All.SendAsync("SendShortAction", $"Transfer the call to human");
+            await _hubContext.Clients.All.SendAsync("SendShortAction", "Transfer the call to human");
 
             if (!_voiceConfig.Mapping.ContainsKey("None"))
             {
