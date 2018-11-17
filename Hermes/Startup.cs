@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Hermes.Hubs;
 using Hermes.Models;
 using Hermes.Settings;
 using Microsoft.AspNetCore.Builder;
@@ -58,11 +59,11 @@ namespace Hermes
                 }
             }
 
-
-
             services.AddSingleton<IDictionary<string, CallState>>(new Dictionary<string, CallState>());
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+
+            services.AddSignalR();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -82,6 +83,10 @@ namespace Hermes
             app.UseStaticFiles();
             app.UseCookiePolicy();
 
+            app.UseSignalR(routes =>
+            {
+                routes.MapHub<CallActivityHub>("/callActivityHub");
+            });
             app.UseMvc(routes =>
             {
                 routes.MapRoute(

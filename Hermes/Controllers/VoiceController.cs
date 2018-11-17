@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Hermes.Hubs;
 using Hermes.Models;
 using Hermes.Settings;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.CognitiveServices.Language.LUIS.Runtime;
 using Microsoft.Extensions.Logging;
 using Twilio.AspNet.Core;
@@ -21,27 +23,30 @@ namespace Hermes.Controllers
         private readonly IDictionary<string, CallState> _callStates;
         private readonly VoiceConfig _voiceConfig;
         private readonly LuisSettings _luisSettings;
+        private readonly IHubContext<CallActivityHub> _hubContext;
 
         public VoiceController(ILogger<VoiceController> logger, ILUISRuntimeClient luisRuntimeClient,
-            IDictionary<string, CallState> callStates, VoiceConfig voiceConfig, LuisSettings luisSettings)
+            IDictionary<string, CallState> callStates, VoiceConfig voiceConfig, LuisSettings luisSettings,
+            IHubContext<CallActivityHub> hubContext)
         {
             _logger = logger;
             _luisRuntimeClient = luisRuntimeClient;
             _callStates = callStates;
             _voiceConfig = voiceConfig;
             _luisSettings = luisSettings;
+            _hubContext = hubContext;
         }
 
         [Route("answer")]
         [HttpPost]
         [Consumes("application/x-www-form-urlencoded")]
-        public IActionResult Answer([FromForm] string callSid, [FromForm] string from)
+        public async Task<IActionResult> Answer([FromForm] string callSid, [FromForm] string from)
         {
             _callStates.Add(callSid, new CallState());
 
             _logger.LogInformation($"Incoming call from {from} with SID {callSid}");
+            await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Answered the phone call from {from}");
 
-            _logger.LogInformation("Call received");
             return TwiML(GatherPlayResponse("000000.wav"));
         }
 
@@ -51,6 +56,7 @@ namespace Hermes.Controllers
         public async Task<IActionResult> GatherResult([FromForm] string callSid, [FromForm] string speechResult)
         {
             _logger.LogDebug($"Full@{DateTime.Now.ToString()} {callSid}: {speechResult}");
+            await _hubContext.Clients.All.SendAsync("SendSpeech", callSid, "Answered the phone call");
 
             return await Dispatcher(callSid, speechResult);
         }
@@ -71,11 +77,11 @@ namespace Hermes.Controllers
                 case CurrentCallState.HungUp:
                     // This phone is already hung up
                     _logger.LogWarning($"[{callSid}]Phone is already hung up");
-                    return TwiML(TwiMlHangUp());
+                    return TwiML(await TwiMlHangUp());
                 case CurrentCallState.Transferred:
                     // This phone is already transferred
                     _logger.LogWarning($"[{callSid}]Phone is already transferred");
-                    return TwiML(TwiMlHangUp());
+                    return TwiML(await TwiMlHangUp());
                 case CurrentCallState.UnknownIntent:
                     // The phone intent is unknown yet.
                     // Look up by LUIS first,
@@ -83,11 +89,12 @@ namespace Hermes.Controllers
                     // play corresponding voices then
                     // Else, play some useless voices
                     _logger.LogInformation($"[{callSid}]Current intent unknown, input {intent}, score {score.Value}");
+                    await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Current Unknown. Got intent {intent}@{score.Value}");
 
                     if (score > 0.2 && IsEndingIntent(intent))
                     {
                         state.CurrentCallState = CurrentCallState.HungUp;
-                        return TwiML(TwiMlHangUp());
+                        return TwiML(await TwiMlHangUp());
                     }
                     else if (score > 0.5)
                     {
@@ -97,36 +104,39 @@ namespace Hermes.Controllers
                         if (intent == "None")
                         {
                             state.CurrentCallState = CurrentCallState.Transferred;
-                            return TwiML(TwiMlTransfer());
+                            return TwiML(await TwiMlTransfer());
                         }
 
                         // else
                         state.CurrentCallState = CurrentCallState.ConfirmedIntent;
-                        return TwiML(TwiMlPlayIntentResponse(state.Intent, state));
+                        return TwiML(await TwiMlPlayIntentResponse(state.Intent, state));
                     }
                     else
                     {
-                        return TwiML(TwiMlPlayUnknownIntent());
+                        return TwiML(await TwiMlPlayUnknownIntent());
                     }
                 case CurrentCallState.ConfirmedIntent:
                     // Filter ending intent
                     _logger.LogInformation(
                         $"[{callSid}]Current intent {state.Intent}, input {intent}, score {score.Value}");
+                    await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Current {state.Intent}. Got intent {intent}@{score.Value}");
+
                     if (score > 0.2 && IsEndingIntent(intent))
                     {
                         state.CurrentCallState = CurrentCallState.HungUp;
-                        return TwiML(TwiMlHangUp());
+                        return TwiML(await TwiMlHangUp());
                     }
 
-                    return TwiML(TwiMlPlayIntentResponse(state.Intent, state));
+                    return TwiML(await TwiMlPlayIntentResponse(state.Intent, state));
                 default:
                     throw new ArgumentOutOfRangeException();
             }
         }
 
-        private VoiceResponse TwiMlTransfer()
+        private async Task<VoiceResponse> TwiMlTransfer()
         {
             _logger.LogDebug("Transferring call");
+            await _hubContext.Clients.All.SendAsync("SendShortAction", $"Transfer the call to human");
 
             if (!_voiceConfig.Mapping.ContainsKey("None"))
             {
@@ -147,9 +157,11 @@ namespace Hermes.Controllers
             return _voiceConfig.Ending.Any(s => s == intent);
         }
 
-        private VoiceResponse TwiMlPlayUnknownIntent()
+        private async Task<VoiceResponse> TwiMlPlayUnknownIntent()
         {
             _logger.LogDebug("Playing unknown intent voices");
+            await _hubContext.Clients.All.SendAsync("SendShortAction", "Play voices for unknown intent");
+            
             // Get voices list
             var subjects = _voiceConfig.Undecided;
             var voices = new List<string>();
@@ -188,9 +200,10 @@ namespace Hermes.Controllers
             return new Uri($"{_luisSettings.StorageEndpoint}{voice}");
         }
 
-        private VoiceResponse TwiMlPlayIntentResponse(string intent, CallState state)
+        private async Task<VoiceResponse> TwiMlPlayIntentResponse(string intent, CallState state)
         {
             _logger.LogDebug($"Play response for intent {intent}");
+            await _hubContext.Clients.All.SendAsync("SendShortAction", $"Play voices for intent {intent}");
 
             if (state.AvailableResponse.Count == 0)
             {
@@ -212,9 +225,11 @@ namespace Hermes.Controllers
             return GatherPlayResponse(voice);
         }
 
-        private VoiceResponse TwiMlHangUp()
+        private async Task<VoiceResponse> TwiMlHangUp()
         {
             _logger.LogDebug("Hang up the phone");
+            await _hubContext.Clients.All.SendAsync("SendShortAction", "Hang up");
+            
             var hangUpVoices = new List<string>();
 
             foreach (var endingCat in _voiceConfig.Ending)
@@ -252,6 +267,7 @@ namespace Hermes.Controllers
         public async Task<IActionResult> GetIntent([FromQuery] string input)
         {
             var (intent, score) = await LookupIntent(input);
+            await _hubContext.Clients.All.SendAsync("SendShortAction", $"{input}: {intent}@{score.Value}");
             return Ok(new
             {
                 Intent = intent,
