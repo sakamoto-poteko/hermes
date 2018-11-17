@@ -191,6 +191,7 @@ namespace Hermes.Controllers
                 speechTimeout: "auto"
             );
 
+            response.Redirect(new Uri("/voice/gatherresult"));
             return response;
         }
 
