@@ -70,7 +70,12 @@ namespace Hermes.Controllers
 
             var state = _callStates[callSid];
 
-            var (intent, score) = string.IsNullOrWhiteSpace(inputText) ? ("None", 1.0) : await LookupIntent(inputText);
+            if (string.IsNullOrWhiteSpace(inputText))
+            {
+                return TwiML(await TwiMlPlayUnknownIntent());
+            }
+            
+            var (intent, score) = await LookupIntent(inputText);
 
             switch (state.CurrentCallState)
             {
