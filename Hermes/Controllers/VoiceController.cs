@@ -185,7 +185,7 @@ namespace Hermes.Controllers
         private Uri GetVoiceUrl(string voice)
         {
             _logger.LogDebug($"Retrieved url for voice {voice}");
-            return new Uri($"https://hermescalling.blob.core.windows.net/voice/{voice}");
+            return new Uri($"{_luisSettings.StorageEndpoint}{voice}");
         }
 
         private VoiceResponse TwiMlPlayIntentResponse(string intent, CallState state)
