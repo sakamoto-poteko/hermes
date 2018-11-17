@@ -171,16 +171,13 @@ namespace Hermes.Controllers
             _logger.LogDebug($"Play interactive voice response {voice}");
             var response = new VoiceResponse();
 
-            // response.Play(GetVoiceUrl(voice));
+            response.Play(GetVoiceUrl(voice));
 
-            var gather = new Gather(language: Gather.LanguageEnum.CmnHansCn,
+            response.Gather(language: Gather.LanguageEnum.CmnHansCn,
                 action: new Uri("/voice/gatherresult", UriKind.Relative),
                 input: new List<Gather.InputEnum>() {Gather.InputEnum.Speech},
                 speechTimeout: "auto"
             );
-            gather.Play(GetVoiceUrl(voice));
-
-            response.Append(gather);
 
             return response;
         }
@@ -260,6 +257,18 @@ namespace Hermes.Controllers
                 Intent = intent,
                 Score = score
             });
+        }
+
+        [Route("preload")]
+        [HttpGet]
+        public IActionResult PlayAll()
+        {
+            var allVoices = _voiceConfig.Mapping.Values.Aggregate((a, b) => a.Concat(b).ToList()).ToList();
+            
+            var response = new VoiceResponse();
+            allVoices.ForEach(s => response.Play(GetVoiceUrl(s)));
+
+            return TwiML(response);
         }
 
         private async Task<(string intent, double? score)> LookupIntent(string input)
