@@ -56,7 +56,7 @@ namespace Hermes.Controllers
         public async Task<IActionResult> GatherResult([FromForm] string callSid, [FromForm] string speechResult)
         {
             _logger.LogDebug($"Full@{DateTime.Now.ToString()} {callSid}: {speechResult}");
-            await _hubContext.Clients.All.SendAsync("SendSpeech", callSid, $"{speechResult}");
+            //await _hubContext.Clients.All.SendAsync("SendSpeech", callSid, $"{speechResult}");
 
             return await Dispatcher(callSid, speechResult);
         }
