@@ -297,6 +297,15 @@ namespace Hermes.Controllers
         {
             var result =
                 await _luisRuntimeClient.Prediction.ResolveAsync(_luisSettings.ApplicationId, input);
+
+            foreach (var entity in result.Entities)
+            {
+                if (entity.Type == "公司")
+                {
+                    await _hubContext.Clients.All.SendAsync("SendShortAction", $"!!!!Identified caller: {entity.Entity}!!");
+                }
+            }
+
             return (result.TopScoringIntent.Intent, result.TopScoringIntent.Score);
         }
     }
