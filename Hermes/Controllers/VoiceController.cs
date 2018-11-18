@@ -95,15 +95,18 @@ namespace Hermes.Controllers
                     // play corresponding voices then
                     // Else, play some useless voices
                     _logger.LogInformation($"[{callSid}]Current intent unknown, input {intent}, score {score.Value}");
-                    await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [Unknown]. Got intent [{intent}@{score.Value}]");
 
                     if (score > 0.2 && IsEndingIntent(intent))
                     {
+                        await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [Unknown]. Got intent [{intent}@{score.Value}], ending");
+
                         state.CurrentCallState = CurrentCallState.HungUp;
                         return TwiML(await TwiMlHangUp());
                     }
                     else if (score > 0.5)
                     {
+                        await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [Unknown]. Got intent [{intent}@{score.Value}], switching");
+
                         state.Intent = intent;
 
                         // Or is it an transfer intent?
@@ -119,6 +122,9 @@ namespace Hermes.Controllers
                     }
                     else
                     {
+                        await _hubContext.Clients.All.SendAsync("SendShortAction",
+                                                                $"Current intent [Unknown]. Got intent [{intent}@{score.Value}], score too low");
+
                         return TwiML(await TwiMlPlayUnknownIntent());
                     }
                 case CurrentCallState.ConfirmedIntent:
