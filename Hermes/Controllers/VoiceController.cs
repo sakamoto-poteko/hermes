@@ -123,7 +123,7 @@ namespace Hermes.Controllers
                     else
                     {
                         await _hubContext.Clients.All.SendAsync("SendShortAction",
-                                                                $"Current intent [Unknown]. Got intent [{intent}@{score.Value}], score too low");
+                                                                $"Current intent [Unknown]. Intent unrecognized yet");
 
                         return TwiML(await TwiMlPlayUnknownIntent());
                     }
