@@ -103,7 +103,7 @@ namespace Hermes.Controllers
                         state.CurrentCallState = CurrentCallState.HungUp;
                         return TwiML(await TwiMlHangUp());
                     }
-                    else if (score > 0.5)
+                    else if (score > 0.5 && !IsUndecidedIntent(intent))
                     {
                         await _hubContext.Clients.All.SendAsync("SendShortAction", $"Current intent [Unknown]. Got intent [{intent}@{score.Value}], switching");
 
@@ -143,6 +143,11 @@ namespace Hermes.Controllers
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+        }
+
+        private bool IsUndecidedIntent(string intent)
+        {
+            return _voiceConfig.Undecided.Any(s => s == intent);
         }
 
         private async Task<VoiceResponse> TwiMlTransfer()
