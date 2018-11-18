@@ -42,7 +42,8 @@ namespace Hermes.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Answer([FromForm] string callSid, [FromForm] string from)
         {
-            _callStates.Add(callSid, new CallState());
+            if (!_callStates.ContainsKey(callSid))
+                _callStates.Add(callSid, new CallState());
 
             _logger.LogInformation($"Incoming call from {from} with SID {callSid}");
             await _hubContext.Clients.All.SendAsync("SendAction", callSid, $"Answered the phone call from {from}");
